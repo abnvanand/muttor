@@ -33,3 +33,6 @@ client: $(CL_OBJ)
 
 clean:
 	rm -f *.o tracker client
+
+removejunk:
+	git ls-files -z -o --exclude-standard | xargs -0 rm
