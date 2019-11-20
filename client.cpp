@@ -117,6 +117,7 @@ void servePeerRequest(int newsocket, struct sockaddr_in newAddr) {
 
         infile.close();
     }
+    close(newsocket);
 }
 
 void peerServer() {
