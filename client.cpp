@@ -48,7 +48,6 @@ void servePeerRequest(int newsocket, struct sockaddr_in newAddr) {
         send(newsocket, bitVector.c_str(), bitVector.size(), 0);
 
     } else if (requestType == REQUEST_DATA) {
-        // TODO: return requested piece
         char shaOfShaBuffer[SHA_DIGEST_LENGTH + 1];
 
         recv(newsocket, &shaOfShaBuffer, SHA_DIGEST_LENGTH, 0);
@@ -100,14 +99,20 @@ void servePeerRequest(int newsocket, struct sockaddr_in newAddr) {
 
             cout << "\t Sent chunk: " << chunkid << " of piece: " << pieceId << endl;
 
-            // FIXME: Implement ack based handing
+            //  Implement ack based handing
             //  Since send() is non blocking the peer sends too many buffers to
             //  requester whereas receive is blocking and the pending request queue at receiver overflows
             //  leading to segfault.
             //  sleeping is a bad way of allowing receiver enough time to process the packet
             //  a better way would be to implement ack based communication flow
             //  where sender waits for the ack of previously sent packet before sending more packets
-            sleep(1);
+//            sleep(1);
+
+            // Wait for acknowledgement of this chunk
+            int ack = 0;
+            recv(newsocket, &ack, sizeof(ack), 0);
+            cout << "\t Received ack for chunk: " << chunkid << " of piece: " << pieceId << endl;
+            cout << "Total Pieces: " << numPieces << endl;
         }
 
         infile.close();
@@ -149,7 +154,9 @@ void peerServer() {
         newsocket = accept(socketFD, (struct sockaddr *) &newAddr, &addr_size);
 
         if (newsocket >= 0) {
-            thread peerThread(servePeerRequest, newsocket, newAddr);
+            thread peerThread(servePeerRequest,
+                              newsocket,
+                              newAddr);
             peerThread.detach();
         }
     }
@@ -373,13 +380,11 @@ void pieceDownloader(string fileNameToSave,
 
     cout << "Downloading pieces from peer: " << peerSocketAddress << endl;
 
-    int socketFD;
-    struct sockaddr_in serverAddr;
-
-    int numPieces = ceil(stof(fileSize) / (float) PIECE_SIZE);
-
     for (auto pieceId:piecesToGet) {
         cout << "\t Downloading piece " << pieceId << " from peer: " << peerSocketAddress << endl;
+
+        int socketFD;
+        struct sockaddr_in serverAddr;
 
         socketFD = socket(AF_INET, SOCK_STREAM, 0);
 
@@ -427,12 +432,18 @@ void pieceDownloader(string fileNameToSave,
 
             recv(socketFD, chunkBuffer, chunkSize, 0);
 
-            write(outfile, chunkBuffer, chunkSize);
-
             cout << "\t\t Received chunk: " << chunkid << " of piece: " << pieceId << endl;
             cout << "\t\t chunk: " << chunkid << " size: " << chunkSize << endl;
 //            cout << "\t\t chunk: " << chunkid << " data: " << chunkBuffer << endl;
+
+            write(outfile, chunkBuffer, chunkSize);
+
             cout << "\t\t Written chunk: " << chunkid << " of piece: " << pieceId << " to file" << endl;
+
+            // Send for acknowledgement of this chunk
+            int ack = 1;
+            send(socketFD, &ack, sizeof(ack), 0);
+            cout << "\t\t Ack sent." << endl;
         }
         close(socketFD);
         hashPieces[shaOfSha][pieceId] = '1';
