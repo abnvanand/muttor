@@ -13,11 +13,11 @@
 
 using namespace std;
 
-//#define PIECE_SIZE 40000   // STOPSHIP
 #define PIECE_SIZE 524288   // 512*1024 Bytes (512KB)
 
-//#define CHUNK_SIZE 6
-#define CHUNK_SIZE 2048
+#define CHUNK_SIZE 2048     // 2*1024 Bytes (2KB)
+
+#define MAX_PENDING_REQUESTS 10
 
 #define LOCALHOST "127.0.0.1"
 #define MSG_ADD "ADD"
@@ -35,5 +35,7 @@ string getHash(string path);
 string getFileNameFromPath(string path);
 
 string getSHAofSHA(string sha);
+
+int getRandom(int min, int max);
 
 #endif //MUTTOR_UTILS_H

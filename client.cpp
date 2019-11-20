@@ -8,6 +8,7 @@
 #include <map>
 #include <netinet/in.h>
 #include <libnet.h>
+#include <algorithm>
 
 #include "utils.h"
 
@@ -125,7 +126,7 @@ void peerServer() {
         exit(1);
     }
 
-    if (listen(socketFD, 10 < 0)) {
+    if (listen(socketFD, MAX_PENDING_REQUESTS) < 0) {
         cout << "Error in listen" << endl;
         exit(1);
     }
@@ -265,6 +266,10 @@ void downloadPeerPieceInfo(string peerSocketAddr, string shaOfSha, string &peerB
     close(socketFD);
 }
 
+bool rarestFirstCmp(pair<int, vector<int>> &a, pair<int, vector<int>> &b) {
+    return a.second.size() < b.second.size();
+}
+
 void pieceSelectionAlgo(vector<string> &peerList,
                         vector<string> &peerBitVectors,
                         vector<vector<int>> &peerToPiecesMap) {
@@ -277,17 +282,48 @@ void pieceSelectionAlgo(vector<string> &peerList,
     int numPeers = peerBitVectors.size();
     int numPieces = peerBitVectors[0].size();
 
+    // <pieceNumber, list of peers>
+    vector<pair<int, vector<int>>> pieceToPeersMapping;
+
     for (int pieceNumber = 0; pieceNumber < numPieces; pieceNumber++) {
+        vector<int> peersContainingThisPiece;
+
         for (int peerId = 0; peerId < numPeers; peerId++) {
             string bitVector = peerBitVectors[peerId];
             if (bitVector[pieceNumber] == '1') {
-                // first peer found containing that piece
-                // is set as the provider for that piece
                 // TODO: Push back piece number in order of piece download priority
-                peerToPiecesMap[peerId].push_back(pieceNumber);
-                break;
+                peersContainingThisPiece.push_back(peerId);
             }
         }
+        pieceToPeersMapping.push_back({pieceNumber, peersContainingThisPiece});
+    }
+
+    cout << "pieceToPeersMapping before sort: " << endl;
+    for (auto e: pieceToPeersMapping) {
+        cout << e.first << " -> ";
+        for (auto i: e.second)
+            cout << i << " ";
+        cout << endl;
+    }
+
+    sort(pieceToPeersMapping.begin(), pieceToPeersMapping.end(), rarestFirstCmp);
+
+    cout << "pieceToPeersMapping after sort: " << endl;
+    for (auto e: pieceToPeersMapping) {
+        cout << e.first << " -> ";
+        for (auto i: e.second)
+            cout << i << " ";
+        cout << endl;
+    }
+
+    // rarest piece is at the front of list
+    for (auto e:pieceToPeersMapping) {
+        int pieceNumber = e.first;
+        vector<int> peers = e.second;
+        int idx = getRandom(0, peers.size() - 1);// generate in range [0, peers.size)
+        assert(idx < peers.size());
+        assert(peers[idx] < peerToPiecesMap.size());
+        peerToPiecesMap[peers[idx]].push_back(pieceNumber);
     }
 }
 
@@ -382,10 +418,6 @@ void pieceDownloader(string fileNameToSave,
 
             recv(socketFD, chunkBuffer, chunkSize, 0);
 
-//            int currentChunkOffset = chunkid * CHUNK_SIZE;
-//        // Seek to beginning of current chunk
-//        lseek(outfile, currentChunkOffset, SEEK_CUR);
-
             write(outfile, chunkBuffer, chunkSize);
 
             cout << "\t\t Received chunk: " << chunkid << " of piece: " << pieceId << endl;
@@ -456,9 +488,6 @@ void downloadFile(string mTorrentFilePath, string fileNameToSave) {
         cout << endl;
     }
 
-
-
-//    ofstream outfile(fileNameToSave, ios_base::binary);
 
     thread *pieceDownloaderThreads = new thread[peerList.size()];
     for (int i = 0; i < peerList.size(); i++) {

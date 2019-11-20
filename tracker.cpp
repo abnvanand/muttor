@@ -125,7 +125,7 @@ void clientComm(int myPort) {
         exit(1);
     }
 
-    if (listen(socketFD, 10) < 0) {
+    if (listen(socketFD, MAX_PENDING_REQUESTS) < 0) {
         cerr << "Error in listen errno: " << errno << endl;
         exit(1);
     }
