@@ -8,6 +8,8 @@ Hash
 ```
 
 # TODO:
-- [] Eager first piece selection algorithm.
-- [] Implement Thread Pool
-- [] Switch to UDP for client->tracker communication.
+ - [x] Implement Eager first piece selection algorithm.
+ - [ ] Implement ack based piece transfer protocol.
+ - [ ] Implement Thread Pool.
+ - [ ] Switch to UDP for client->tracker communication.
+ - [ ] Fault tolerant tracker.
