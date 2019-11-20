@@ -155,8 +155,8 @@ void clientComm(int myPort) {
 #pragma clang diagnostic pop
 }
 
-int main() {
-    string myPort = "5555";
+int main(int argc, char **argv) {
+    string myPort = argv[1];
 
     // TODO: Implement Multitracker system
     thread syncThread(synchronizeTrackers);

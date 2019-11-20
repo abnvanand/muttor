@@ -627,9 +627,9 @@ void clientMenu() {
 int main(int argc, char **argv) {
     myIp = LOCALHOST;
     myPort = argv[1];
-    tracker1Port = "5555";
-    tracker2Port = "5556";
-//
+    tracker1Port = argv[2];
+    tracker2Port = argv[3];
+
     // NOTE: donot use cin>> anywhere in the code coz things will break
     // use getline(cin, myPort); instead
 
