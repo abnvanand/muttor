@@ -99,6 +99,15 @@ void servePeerRequest(int newsocket, struct sockaddr_in newAddr) {
             send(newsocket, &chunkBuffer, currentChunkSize, 0);
 
             cout << "\t Sent chunk: " << chunkid << " of piece: " << pieceId << endl;
+
+            // FIXME: Implement ack based handing
+            //  Since send() is non blocking the peer sends too many buffers to
+            //  requester whereas receive is blocking and the pending request queue at receiver overflows
+            //  leading to segfault.
+            //  sleeping is a bad way of allowing receiver enough time to process the packet
+            //  a better way would be to implement ack based communication flow
+            //  where sender waits for the ack of previously sent packet before sending more packets
+            sleep(1);
         }
 
         infile.close();
