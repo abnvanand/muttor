@@ -6,17 +6,18 @@ make
 
 ## Run tracker
 ```shell script
-./tracker trackerPort
+./tracker myIp:myPort otherTrackerIp:otherTrackerPort
 ```
 ## Run clients
 ```shell script
-./client clientPort tracker1Port tracker2Port
+./client myIp:myPort defaultTrackerIp:defaultTrackerPort
 ```
 
 ## Share file
 ```
 share localFilePath mTorrentFilename 
 ```
+
 ## Get file
 ```
 get mTorrentFilename fileNameToSave
@@ -36,7 +37,7 @@ tracker N Port
 # TODO:
  - [x] Implement rarest first piece selection algorithm.
  - [x] Implement ack based piece transfer protocol.
- - [ ] Implement multi-tracker system
- - [ ] Switch to UDP for client-tracker and tracker-tracker communication.
+ - [x] Implement multi-tracker system
+ - [x] Switch to UDP for tracker-tracker communication.
  - [ ] Implement Thread Pool.
  - [ ] Implement DHT(Kademlia) ??

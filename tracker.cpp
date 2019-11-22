@@ -8,18 +8,12 @@
 #include <unordered_set>
 #include "utils.h"
 
-
 using namespace std;
+
+string myIp, myPort;
 
 // <hash, list-of-seeders-and-leechers>
 unordered_map<string, unordered_set<string>> seedersAndLeechers;
-// <hash, list-of-leechers>
-//unordered_map<string, unordered_set<string>> leechers;
-
-
-void synchronizeTrackers() {
-
-}
 
 void fillFieldsFromMsg(string msgBuffer, string &commandType, string &shaOfSha, string &clientIP, string &clientPort) {
     vector<string> tokens = getTokens(msgBuffer, FIELD_SEPARATOR);
@@ -34,7 +28,58 @@ void fillFieldsFromMsg(string msgBuffer, string &commandType, string &shaOfSha, 
     clientPort = tokens.size() > 3 ? tokens[3] : "";
 }
 
-void serveClient(int newsocketFD, struct sockaddr_in newAddr) {
+void notifyOtherTracker(string syncMsg, string otherTrackerSocket) {
+    auto tokens = getTokens(otherTrackerSocket, ':');
+    int sockfd;
+    struct sockaddr_in servaddr;
+
+    // Creating socket file descriptor
+    if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+        printf("socket creation failed");
+        exit(0);
+    }
+
+    memset(&servaddr, 0, sizeof(servaddr));
+
+    // Filling server information
+    servaddr.sin_family = AF_INET;
+    servaddr.sin_addr.s_addr = inet_addr(tokens[0].c_str());
+    servaddr.sin_port = htons(stoi(tokens[1]));
+    // send hello message to server
+    sendto(sockfd, (const char *) syncMsg.c_str(), strlen(syncMsg.c_str()),
+           0, (const struct sockaddr *) &servaddr,
+           sizeof(servaddr));
+}
+
+
+void serveTracker(int udpfd, struct sockaddr_in cliaddr) {
+    char buffer[MAX_DATAGRAM_SIZE];
+    socklen_t addr_size = sizeof(cliaddr);
+    bzero(buffer, sizeof(buffer));
+
+    recvfrom(udpfd, buffer, sizeof(buffer), 0,
+             (struct sockaddr *) &cliaddr, &addr_size);
+
+    cout << "Incoming request over UDP from tracker: "
+         << inet_ntoa(cliaddr.sin_addr) << ":" << ntohs(cliaddr.sin_port) << endl
+         << "\t\t msg: " << buffer << endl;
+
+    string msgType, shaOfSha, clientIP, clientPort;
+    fillFieldsFromMsg(buffer, msgType, shaOfSha, clientIP, clientPort);
+
+    if (msgType == MSG_ADD) {
+        unordered_set<string> uset = seedersAndLeechers[shaOfSha];
+        uset.insert(clientIP + ":" + clientPort);
+        seedersAndLeechers[shaOfSha] = uset;
+
+    } else if (msgType == MSG_REMOVE) {
+        unordered_set<string> uset = seedersAndLeechers[shaOfSha];
+        uset.erase(clientIP + ":" + clientPort);
+        seedersAndLeechers[shaOfSha] = uset;
+    }
+}
+
+void serveClient(int newsocketFD, struct sockaddr_in newAddr, string otherTrackerSocket) {
     cout << "Inside serveClient" << endl;
     cout << "Received request from: "
          << inet_ntoa(newAddr.sin_addr) << ":" << ntohs(newAddr.sin_port) << endl;
@@ -54,11 +99,6 @@ void serveClient(int newsocketFD, struct sockaddr_in newAddr) {
     string msgType, shaOfSha, clientIP, clientPort;
 
     fillFieldsFromMsg(msgBuffer, msgType, shaOfSha, clientIP, clientPort);
-
-    if (msgType == MSG_ADD or msgType == MSG_REMOVE) {
-        // TODO: Notify other tracker
-//        updateSeederLeecherStatusOnTracker(msgType, shaOfSha);
-    }
 
     if (msgType == MSG_ADD) {
         unordered_set<string> uset = seedersAndLeechers[shaOfSha];
@@ -98,44 +138,63 @@ void serveClient(int newsocketFD, struct sockaddr_in newAddr) {
          << inet_ntoa(newAddr.sin_addr) << ":" << ntohs(newAddr.sin_port) << endl;
 
     close(newsocketFD);
+
+    cout << "Sending sync msg to other tracker";
+    if (msgType == MSG_ADD or msgType == MSG_REMOVE) {
+        // TODO: Notify other tracker
+        notifyOtherTracker(msgBuffer, otherTrackerSocket);
+    }
 }
 
-void clientComm(int myPort) {
-    // TODO: switch to UDP "SOCK_DGRAM"
-    clog << "Here port" << myPort << endl;
+void tcpUdp(string otherTrackerSocket) {
+    int listenFD;
+    int udpFD;
+    int connFD;
 
-    int socketFD;
-    struct sockaddr_in serveraddr;
+    socklen_t addr_size;
+    int nready, maxfdp1;
+    fd_set rset;
 
-    socketFD = socket(AF_INET, SOCK_STREAM, 0);
+    struct sockaddr_in serveraddr, cliaddr;
 
-    if (socketFD < 0) {
+    // Create TCP socket for listening
+    listenFD = socket(AF_INET, SOCK_STREAM, 0);
+
+    if (listenFD < 0) {
         cerr << "Failed to create socket" << endl;
         exit(1);
     }
 
-    memset(&serveraddr, 0, sizeof(serveraddr));
+    memset(&serveraddr, 0, sizeof(serveraddr));// bzero(&serveraddr, sizeof(&serveraddr))
 
     serveraddr.sin_family = AF_INET;
-    serveraddr.sin_port = htons(myPort);
-    serveraddr.sin_addr.s_addr = inet_addr(LOCALHOST);
+    serveraddr.sin_port = htons(stoi(myPort));
+    serveraddr.sin_addr.s_addr = inet_addr(myIp.c_str());
 
-    if (bind(socketFD, (struct sockaddr *) &serveraddr, sizeof(serveraddr)) < 0) {
+    // binding server addr structure to listenFD
+    if (bind(listenFD, (struct sockaddr *) &serveraddr, sizeof(serveraddr)) < 0) {
         cerr << "Error in binding to " << endl;
         exit(1);
     }
 
-    if (listen(socketFD, MAX_PENDING_REQUESTS) < 0) {
+    if (listen(listenFD, MAX_PENDING_REQUESTS) < 0) {
         cerr << "Error in listen errno: " << errno << endl;
         exit(1);
     }
 
-    clog << "Listening on port: " << myPort << endl;
 
-    struct sockaddr_in newAddr;
-    int newsocketFD;
-    socklen_t addr_size;
-    addr_size = sizeof(newAddr);
+    /* create UDP socket */
+    udpFD = socket(AF_INET, SOCK_DGRAM, 0);
+    // binding server addr structure to udp sockfd
+    bind(udpFD, (struct sockaddr *) &serveraddr, sizeof(serveraddr));
+
+    clog << "Listening on port for TCP and UDP: " << myPort << endl;
+
+    // clear the descriptor set
+    FD_ZERO(&rset);
+
+    // get maxfd
+    maxfdp1 = max(listenFD, udpFD) + 1;
 
 
 #pragma clang diagnostic push
@@ -143,26 +202,46 @@ void clientComm(int myPort) {
     while (true) {
         // Infinite loop Accepts incoming requests from clients
 
-        newsocketFD = accept(socketFD, (struct sockaddr *) &newAddr, &addr_size);
-        clog << "Accepted new request " << endl;
+        // set listenfd and udpfd in readset
+        FD_SET(listenFD, &rset);
+        FD_SET(udpFD, &rset);
 
-        if (newsocketFD >= 0) {
-            // Process the request on separate thread
-            thread serveClientThread(serveClient, newsocketFD, newAddr);
-            serveClientThread.detach();
+        // select the ready descriptor
+        nready = select(maxfdp1, &rset, NULL, NULL, NULL);
+
+        // if tcp socket is readable then handle
+        // it by accepting the connection
+        if (FD_ISSET(listenFD, &rset)) {
+            addr_size = sizeof(cliaddr);
+
+            connFD = accept(listenFD, (struct sockaddr *) &cliaddr, &addr_size);
+            clog << "Accepted new request " << endl;
+            if (connFD >= 0) {
+                // Process the request on separate thread
+                thread serveClientThread(serveClient, connFD, cliaddr, otherTrackerSocket);
+                serveClientThread.detach();
+            }
         }
+
+        // if udp socket is readable receive the message.
+        if (FD_ISSET(udpFD, &rset)) {
+            addr_size = sizeof(cliaddr);
+            thread serverTrackersThread(serveTracker, udpFD, cliaddr);
+            serverTrackersThread.detach();
+        }
+
+
     }
 #pragma clang diagnostic pop
 }
 
 int main(int argc, char **argv) {
-    string myPort = argv[1];
+    auto tokens = getTokens(argv[1], ':');
+    myIp = tokens[0];
+    myPort = tokens[1];
+    string otherTrackerSocket = argv[2];
 
-    // TODO: Implement Multitracker system
-    thread syncThread(synchronizeTrackers);
+    thread tcpUdpThread(tcpUdp, otherTrackerSocket);
 
-    thread clientCommThread(clientComm, stoi(myPort));
-
-    syncThread.join();
-    clientCommThread.join();
+    tcpUdpThread.join();
 }

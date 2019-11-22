@@ -17,6 +17,8 @@ using namespace std;
 
 #define CHUNK_SIZE 2048     // 2*1024 Bytes (2KB)
 
+#define MAX_DATAGRAM_SIZE 2048    // 2*1024 Bytes (2KB)
+
 #define MAX_PENDING_REQUESTS 10
 
 #define LOCALHOST "127.0.0.1"
