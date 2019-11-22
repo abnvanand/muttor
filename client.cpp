@@ -134,6 +134,7 @@ void peerServer() {
 
     serveraddr.sin_family = AF_INET;
     serveraddr.sin_port = htons(stoi(myPort));
+    // Can't use INADDR_ANY bcoz have to tell my ip to trackers so that other peers could find me
     serveraddr.sin_addr.s_addr = inet_addr(myIp.c_str());
 
     if (bind(socketFD, (struct sockaddr *) &serveraddr, sizeof(serveraddr)) < 0) {
