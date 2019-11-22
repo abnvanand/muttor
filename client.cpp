@@ -5,7 +5,6 @@
 #include <cmath>
 #include <cstring>
 #include <unordered_map>
-#include <map>
 #include <netinet/in.h>
 #include <libnet.h>
 #include <algorithm>
@@ -17,15 +16,16 @@
 
 #define REQUEST_BITVECTOR 100
 #define REQUEST_DATA 101
+#define QUIT "q"
 using namespace std;
 
-string myIp, myPort, tracker1Port, tracker2Port;
+string myIp, myPort, defaultTracker;
 // <hash, bitvector>
 unordered_map<string, string> hashPieces;
 // <hash, localFilePath>
 unordered_map<string, string> hashPath;
 
-void updateSeederLeecherStatusOnTracker(string msgType, string shaOfSha);
+void updateSeederLeecherStatusOnTracker(string msgType, string shaOfSha, vector<string> &trackers);
 
 void servePeerRequest(int newsocket, struct sockaddr_in newAddr) {
     cout << "Received request from PEER: "
@@ -165,53 +165,64 @@ void peerServer() {
 }
 
 void fillFieldsFromMtorrentFile(string mTorrentFilePath,
-                                string &tracker1,
-                                string &tracker2,
+                                vector<string> &trackers,
                                 string &fileSize,
                                 string &hash) {
     // Hash = 20 char sha1 of each piece
     ifstream infile(mTorrentFilePath);
-    getline(infile, tracker1);
-    getline(infile, tracker2);
     getline(infile, fileSize); // skips filename
     getline(infile, fileSize);
     getline(infile, hash);
 
+    string tracker;
+    while (getline(infile, tracker)) {
+        if (tracker.empty())
+            continue;
+        trackers.push_back(tracker);
+    }
+
     cout << "Read from " << mTorrentFilePath << endl;
-    cout << " tracker1 " << tracker1 << endl;
-    cout << " tracker2 " << tracker2 << endl;
     cout << " fileSize " << fileSize << endl;
     cout << " hash " << hash << endl;
+    for (int i = 0; i < trackers.size(); i++)
+        cout << " tracker" << i + 1 << " " << trackers[i] << endl;
 
     infile.close();
 }
 
-string getSeedersFromTracker(string shaOfSha) {
+string getSeedersFromTracker(string shaOfSha, vector<string> &trackers) {
+    cout << "Inside getSeedersFromTracker" << endl;
     int socketFD;
     struct sockaddr_in serverAddress;
 
     socketFD = socket(AF_INET, SOCK_STREAM, 0);// TODO: switch to UDP
     if (socketFD < 0) {
-        cerr << "Error in creating Socket" << endl;
+        cerr << "\tError in creating Socket" << endl;
         exit(1);
     }
 
-    memset(&serverAddress, '\0', sizeof(serverAddress));
-    serverAddress.sin_family = AF_INET;
-    serverAddress.sin_port = htons(stoi(tracker1Port));
-    serverAddress.sin_addr.s_addr = inet_addr(LOCALHOST);
+    bool connectedToTracker = false;
 
-    if (connect(socketFD, (struct sockaddr *) &serverAddress, sizeof(serverAddress)) < 0) {
-        cout << "Tracker 1 Not Working" << endl;
-        cout << "Trying to connect to Tracker 2";
+    for (auto trackerSocketAddr: trackers) {
+        vector<string> tokens = getTokens(trackerSocketAddr, ':');
+        assert(!tokens.empty());
+
         memset(&serverAddress, '\0', sizeof(serverAddress));
         serverAddress.sin_family = AF_INET;
-        serverAddress.sin_port = htons(stoi(tracker2Port));
-        serverAddress.sin_addr.s_addr = inet_addr(LOCALHOST);
+        serverAddress.sin_port = htons(stoi(tokens[1]));
+        serverAddress.sin_addr.s_addr = inet_addr(tokens[0].c_str());
+
+        cout << "\tConnecting to  tracker: " << trackerSocketAddr << endl;
         if (connect(socketFD, (struct sockaddr *) &serverAddress, sizeof(serverAddress)) < 0) {
-            cout << "Tracker 2 also down";
-            exit(1);
+            cout << "\tTracker: " << trackerSocketAddr << " is down." << endl;
+        } else {
+            connectedToTracker = true;
+            break;
         }
+    }
+    if (!connectedToTracker) {
+        cout << "\tAll trackers are down" << endl;
+        exit(1);
     }
 
     stringstream ss;
@@ -237,7 +248,7 @@ string getSeedersFromTracker(string shaOfSha) {
 
     responseBuffer[responseLength] = '\0';
 
-    cout << "Received response: " << responseBuffer << endl;
+    cout << "\tReceived response: " << responseBuffer << endl;
 
     close(socketFD);
 
@@ -455,12 +466,11 @@ void pieceDownloader(string fileNameToSave,
 void downloadFile(string mTorrentFilePath, string fileNameToSave) {
     cout << "Here2 downloadFile" << endl;
 
-    string tracker1, tracker2;
+    vector<string> trackers;
     string hash; // needed to verify each piece of data to be received
     string fileSize;
     fillFieldsFromMtorrentFile(mTorrentFilePath,
-                               tracker1,
-                               tracker2,
+                               trackers,
                                fileSize,
                                hash);
 
@@ -469,7 +479,7 @@ void downloadFile(string mTorrentFilePath, string fileNameToSave) {
     cout << "getting shaOfSha: " << shaOfSha << endl;
 
     // Step 1: Get seedersAndLeechers list
-    string seedersString = getSeedersFromTracker(shaOfSha);
+    string seedersString = getSeedersFromTracker(shaOfSha, trackers);
     vector<string> peerList = getTokens(seedersString, FIELD_SEPARATOR);
 
     cout << "List of seeders: " << endl;
@@ -478,7 +488,7 @@ void downloadFile(string mTorrentFilePath, string fileNameToSave) {
 
     // Step 2: I am now a leecher for this file
     // so notify tracker that I can serve this file in future
-    updateSeederLeecherStatusOnTracker(MSG_ADD, shaOfSha);
+    updateSeederLeecherStatusOnTracker(MSG_ADD, shaOfSha, trackers);
 
     int numPieces = ceil(stof(fileSize) / (float) PIECE_SIZE);
     // bitvector of all zeroes coz I am yet to begin download
@@ -528,48 +538,71 @@ void downloadFile(string mTorrentFilePath, string fileNameToSave) {
     cout << "Downloaded file: " << fileNameToSave << endl;
 }
 
-string createTorrentFile(string filePath, string mTorrentFileName) {
-    string hash = getHash(filePath);
+// Creates torrent file for `filePath` and populates `hash` and `trackers`.
+void createTorrentFile(string filePath, string mTorrentFileName,
+                       string &hash, vector<string> &trackers) {
+    hash = getHash(filePath);
     int fileSize = getFileSize(filePath);
 
     ofstream mTorrentFile(mTorrentFileName, ios_base::ate);
-    mTorrentFile << LOCALHOST << ":" << tracker1Port << endl;
-    mTorrentFile << LOCALHOST << ":" << tracker2Port << endl;
+
     mTorrentFile << getFileNameFromPath(filePath) << endl;
     mTorrentFile << fileSize << endl;
     mTorrentFile << hash << endl;
-    mTorrentFile.close();
+    while (true) {
+        string trackerSocket;
+        cout << "Enter tracker's socket address default(" << defaultTracker << ")." << endl
+             << "type " << QUIT << " to quit: ";
+        getline(cin, trackerSocket);
 
-    return hash;
+        if (trackerSocket.empty())
+            trackerSocket = defaultTracker;
+        else if (trackerSocket == QUIT)
+            break;
+
+        mTorrentFile << trackerSocket << endl;
+        trackers.push_back(trackerSocket);
+    }
+
+    mTorrentFile.close();
 }
 
 
-void updateSeederLeecherStatusOnTracker(string msgType, string shaOfSha) {
+void updateSeederLeecherStatusOnTracker(string msgType,
+                                        string shaOfSha,
+                                        vector<string> &trackers) {
+    cout << "Inside updateSeederLeecherStatusOnTracker" << endl;
     int socketFD;
     struct sockaddr_in serverAddress;
 
     socketFD = socket(AF_INET, SOCK_STREAM, 0);// TODO: switch to UDP
     if (socketFD < 0) {
-        cerr << "Error in creating Socket" << endl;
+        cerr << "\tError in creating Socket" << endl;
         exit(1);
     }
 
-    memset(&serverAddress, '\0', sizeof(serverAddress));
-    serverAddress.sin_family = AF_INET;
-    serverAddress.sin_port = htons(stoi(tracker1Port));
-    serverAddress.sin_addr.s_addr = inet_addr(LOCALHOST);
+    bool connectedToTracker = false;
 
-    if (connect(socketFD, (struct sockaddr *) &serverAddress, sizeof(serverAddress)) < 0) {
-        cout << "Tracker 1 Not Working" << endl;
-        cout << "Trying to connect to Tracker 2";
+    for (auto trackerSocketAddr: trackers) {
+        vector<string> tokens = getTokens(trackerSocketAddr, ':');
+        assert(!tokens.empty());
+
         memset(&serverAddress, '\0', sizeof(serverAddress));
         serverAddress.sin_family = AF_INET;
-        serverAddress.sin_port = htons(stoi(tracker2Port));
-        serverAddress.sin_addr.s_addr = inet_addr(LOCALHOST);
+        serverAddress.sin_port = htons(stoi(tokens[1]));
+        serverAddress.sin_addr.s_addr = inet_addr(tokens[0].c_str());
+
+        cout << "\tConnecting to  tracker: " << trackerSocketAddr << endl;
         if (connect(socketFD, (struct sockaddr *) &serverAddress, sizeof(serverAddress)) < 0) {
-            cout << "Tracker 2 also down";
-            exit(1);
+            cout << "\tTracker: " << trackerSocketAddr << " is down." << endl;
+        } else {
+            connectedToTracker = true;
+            break;
         }
+    }
+    if (!connectedToTracker) {
+        cout << "\tAll trackers are down" << endl;
+        exit(1);
     }
 
     stringstream ss;
@@ -586,7 +619,7 @@ void updateSeederLeecherStatusOnTracker(string msgType, string shaOfSha) {
     send(socketFD, &msgLength, sizeof(msgLength), 0);
     // Send the actual msg
     send(socketFD, msg.c_str(), msgLength, 0);
-
+    cout << "\tStatus updated." << endl;
     close(socketFD);
 }
 
@@ -605,7 +638,10 @@ void clientMenu() {
             // command: share pathOfFileToShare mtorrentFileName
             assert(tokens.size() == 3);
 
-            string hash = createTorrentFile(tokens[1], tokens[2]);
+            string hash;
+            vector<string> trackers;
+            createTorrentFile(tokens[1], tokens[2], hash, trackers);
+
             string shaOfsha = getSHAofSHA(hash);
 
             int numPieces = ceil((float) getFileSize(tokens[1]) / (float) PIECE_SIZE);
@@ -616,7 +652,7 @@ void clientMenu() {
             hashPath[shaOfsha] = tokens[1];
 
             //  Notify tracker that I am serving this file
-            updateSeederLeecherStatusOnTracker(MSG_ADD, shaOfsha);
+            updateSeederLeecherStatusOnTracker(MSG_ADD, shaOfsha, trackers);
 
         } else if (tokens[0] == CMD_GET) {
             cout << "Here2 clientMenu" << endl;
@@ -637,10 +673,10 @@ void clientMenu() {
 
 
 int main(int argc, char **argv) {
-    myIp = LOCALHOST;
-    myPort = argv[1];
-    tracker1Port = argv[2];
-    tracker2Port = argv[3];
+    auto tokens = getTokens(argv[1], ':');
+    myIp = tokens[0];
+    myPort = tokens[1];
+    defaultTracker = argv[2];
 
     // NOTE: donot use cin>> anywhere in the code coz things will break
     // use getline(cin, myPort); instead

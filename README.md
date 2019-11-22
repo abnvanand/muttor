@@ -24,16 +24,19 @@ get mTorrentFilename fileNameToSave
 
 # mtorrent file structure
 ```
-tracker1Port
-tracker2Port
 Filename
 Filesize
 Hash
+tracker 1 Port
+tracker 2 Port
+...
+tracker N Port
 ```
 
 # TODO:
  - [x] Implement rarest first piece selection algorithm.
  - [x] Implement ack based piece transfer protocol.
- - [ ] Implement Thread Pool.
+ - [ ] Implement multi-tracker system
  - [ ] Switch to UDP for client-tracker and tracker-tracker communication.
- - [ ] Fault tolerant tracker.
+ - [ ] Implement Thread Pool.
+ - [ ] Implement DHT(Kademlia) ??
