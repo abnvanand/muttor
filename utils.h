@@ -28,17 +28,17 @@ using namespace std;
 
 #define FIELD_SEPARATOR '|'
 
-vector<string> getTokens(string line, char DELIM);
+vector<string> getTokens(const string& line, char DELIM);
 
-int getFileSize(string filePath);
+int getFileSize(const string& filePath);
 
-string getHash(string path);
+string getHash(const string& path);
 
-string getFileNameFromPath(string path);
+string getFileNameFromPath(const string& path);
 
 string getSHAofSHA(string sha);
 
-string getNodeId(string str);
+string getNodeId(const string& str);
 
 int getRandom(int min, int max);
 

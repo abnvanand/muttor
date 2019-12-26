@@ -35,7 +35,7 @@ unordered_map<string, string> hashPieces;
 // <hash, localFilePath>
 unordered_map<string, string> hashPath;
 
-void updateSeederLeecherStatusOnTracker(string msgType, string shaOfSha, vector<string> &trackers);
+void updateSeederLeecherStatusOnTracker(const string &msgType, const string &shaOfSha, vector<string> &trackers);
 
 void servePeerRequest(int newsocket, struct sockaddr_in newAddr) {
     cout << "Received request from PEER: "
@@ -132,7 +132,7 @@ void servePeerRequest(int newsocket, struct sockaddr_in newAddr) {
 
 void peerServer() {
     int socketFD;
-    struct sockaddr_in serveraddr;
+    struct sockaddr_in serveraddr{};
 
     socketFD = socket(AF_INET, SOCK_STREAM, 0);
     if (socketFD < 0) {
@@ -157,11 +157,13 @@ void peerServer() {
         exit(1);
     }
 
-    struct sockaddr_in newAddr;
+    struct sockaddr_in newAddr{};
     int newsocket;
     socklen_t addr_size;
     addr_size = sizeof(newAddr);
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wmissing-noreturn"
     while (true) {
         newsocket = accept(socketFD, (struct sockaddr *) &newAddr, &addr_size);
 
@@ -172,10 +174,11 @@ void peerServer() {
             peerThread.detach();
         }
     }
+#pragma clang diagnostic pop
 
 }
 
-void fillFieldsFromMtorrentFile(string mTorrentFilePath,
+void fillFieldsFromMtorrentFile(const string &mTorrentFilePath,
                                 vector<string> &trackers,
                                 string &fileSize,
                                 string &hash) {
@@ -201,10 +204,10 @@ void fillFieldsFromMtorrentFile(string mTorrentFilePath,
     infile.close();
 }
 
-string getSeedersFromTracker(string shaOfSha, vector<string> &trackers) {
+string getSeedersFromTracker(const string &shaOfSha, vector<string> &trackers) {
     cout << "Inside getSeedersFromTracker" << endl;
     int socketFD;
-    struct sockaddr_in serverAddress;
+    struct sockaddr_in serverAddress{};
 
     socketFD = socket(AF_INET, SOCK_STREAM, 0);// TODO: switch to UDP
     if (socketFD < 0) {
@@ -214,7 +217,7 @@ string getSeedersFromTracker(string shaOfSha, vector<string> &trackers) {
 
     bool connectedToTracker = false;
 
-    for (auto trackerSocketAddr: trackers) {
+    for (const auto &trackerSocketAddr: trackers) {
         vector<string> tokens = getTokens(trackerSocketAddr, ':');
         assert(!tokens.empty());
 
@@ -266,13 +269,13 @@ string getSeedersFromTracker(string shaOfSha, vector<string> &trackers) {
     return responseBuffer;
 }
 
-void downloadPeerPieceInfo(string peerSocketAddr, string shaOfSha, string &peerBitVector) {
+void downloadPeerPieceInfo(const string &peerSocketAddr, const string &shaOfSha, string &peerBitVector) {
     cout << "Connecting to peer " << peerSocketAddr << endl;
 
     // tokens[0] = IP Address, tokens[1] = Port
     vector<string> tokens = getTokens(peerSocketAddr, ':');
     int socketFD;
-    struct sockaddr_in serverAddr;
+    struct sockaddr_in serverAddr{};
 
     // Connect to peer over TCP
     socketFD = socket(AF_INET, SOCK_STREAM, 0);
@@ -334,11 +337,11 @@ void pieceSelectionAlgo(vector<string> &peerList,
                 peersContainingThisPiece.push_back(peerId);
             }
         }
-        pieceToPeersMapping.push_back({pieceNumber, peersContainingThisPiece});
+        pieceToPeersMapping.emplace_back(pieceNumber, peersContainingThisPiece);
     }
 
     cout << "pieceToPeersMapping before sort: " << endl;
-    for (auto e: pieceToPeersMapping) {
+    for (const auto &e: pieceToPeersMapping) {
         cout << e.first << " -> ";
         for (auto i: e.second)
             cout << i << " ";
@@ -348,7 +351,7 @@ void pieceSelectionAlgo(vector<string> &peerList,
     sort(pieceToPeersMapping.begin(), pieceToPeersMapping.end(), rarestFirstCmp);
 
     cout << "pieceToPeersMapping after sort: " << endl;
-    for (auto e: pieceToPeersMapping) {
+    for (const auto &e: pieceToPeersMapping) {
         cout << e.first << " -> ";
         for (auto i: e.second)
             cout << i << " ";
@@ -356,7 +359,7 @@ void pieceSelectionAlgo(vector<string> &peerList,
     }
 
     // rarest piece is at the front of list
-    for (auto e:pieceToPeersMapping) {
+    for (const auto &e:pieceToPeersMapping) {
         int pieceNumber = e.first;
         vector<int> peers = e.second;
         int idx = getRandom(0, (int) peers.size() - 1);// generate in range [0, peers.size)
@@ -366,7 +369,7 @@ void pieceSelectionAlgo(vector<string> &peerList,
     }
 }
 
-vector<string> getPeerBitVectors(vector<string> &peerList, string shaOfSha, int numPieces) {
+vector<string> getPeerBitVectors(vector<string> &peerList, const string &shaOfSha, int numPieces) {
     // Initialize empty peerBitVectors
     vector<string> peerBitVectors(peerList.size(), string(numPieces, '0'));
     for (auto i = 0; i < (int) peerBitVectors.size(); i++) {
@@ -374,7 +377,7 @@ vector<string> getPeerBitVectors(vector<string> &peerList, string shaOfSha, int 
     }
 
     // Contact each peer on separate threads
-    thread *peerPieceInfoThreads = new thread[peerList.size()];
+    auto *peerPieceInfoThreads = new thread[peerList.size()];
     for (int i = 0; i < (int) peerList.size(); i++) {
         peerPieceInfoThreads[i] = thread(downloadPeerPieceInfo, peerList[i], shaOfSha, ref(peerBitVectors[i]));
     }
@@ -393,11 +396,11 @@ vector<string> getPeerBitVectors(vector<string> &peerList, string shaOfSha, int 
 
 // Each thread belong to a single peer
 // Downloads all pieces to get from this peer
-void pieceDownloader(string fileNameToSave,
-                     string peerSocketAddress,
-                     vector<int> piecesToGet,
-                     string shaOfSha,
-                     string fileSize) {
+void pieceDownloader(const string &fileNameToSave,
+                     const string &peerSocketAddress,
+                     const vector<int> &piecesToGet,
+                     const string &shaOfSha,
+                     const string &fileSize) {
     int outfile = open(fileNameToSave.c_str(),
                        O_RDWR | O_CREAT, 0777);
 
@@ -407,7 +410,7 @@ void pieceDownloader(string fileNameToSave,
         cout << "\t Downloading piece " << pieceId << " from peer: " << peerSocketAddress << endl;
 
         int socketFD;
-        struct sockaddr_in serverAddr;
+        struct sockaddr_in serverAddr{};
 
         socketFD = socket(AF_INET, SOCK_STREAM, 0);
 
@@ -474,7 +477,7 @@ void pieceDownloader(string fileNameToSave,
     close(outfile);
 }
 
-void downloadFile(string mTorrentFilePath, string fileNameToSave) {
+void downloadFile(const string &mTorrentFilePath, const string &fileNameToSave) {
     cout << "Here2 downloadFile" << endl;
 
     vector<string> trackers;
@@ -494,7 +497,7 @@ void downloadFile(string mTorrentFilePath, string fileNameToSave) {
     vector<string> peerList = getTokens(seedersString, FIELD_SEPARATOR);
 
     cout << "List of seeders: " << endl;
-    for (auto i:peerList)
+    for (const auto &i:peerList)
         cout << "\t" << i << endl;
 
     // Step 2: I am now a leecher for this file
@@ -531,7 +534,7 @@ void downloadFile(string mTorrentFilePath, string fileNameToSave) {
     }
 
 
-    thread *pieceDownloaderThreads = new thread[peerList.size()];
+    auto *pieceDownloaderThreads = new thread[peerList.size()];
     for (int i = 0; i < (int) peerList.size(); i++) {
         pieceDownloaderThreads[i] = thread(pieceDownloader,
                                            fileNameToSave,
@@ -550,7 +553,7 @@ void downloadFile(string mTorrentFilePath, string fileNameToSave) {
 }
 
 // Creates torrent file for `filePath` and populates `hash` and `trackers`.
-void createTorrentFile(string filePath, string mTorrentFileName,
+void createTorrentFile(const string &filePath, const string &mTorrentFileName,
                        string &hash, vector<string> &trackers) {
     hash = getHash(filePath);
     int fileSize = getFileSize(filePath);
@@ -579,12 +582,12 @@ void createTorrentFile(string filePath, string mTorrentFileName,
 }
 
 
-void updateSeederLeecherStatusOnTracker(string msgType,
-                                        string shaOfSha,
+void updateSeederLeecherStatusOnTracker(const string &msgType,
+                                        const string &shaOfSha,
                                         vector<string> &trackers) {
     cout << "Inside updateSeederLeecherStatusOnTracker" << endl;
     int socketFD;
-    struct sockaddr_in serverAddress;
+    struct sockaddr_in serverAddress{};
 
     socketFD = socket(AF_INET, SOCK_STREAM, 0);// TODO: switch to UDP
     if (socketFD < 0) {
@@ -594,7 +597,7 @@ void updateSeederLeecherStatusOnTracker(string msgType,
 
     bool connectedToTracker = false;
 
-    for (auto trackerSocketAddr: trackers) {
+    for (const auto &trackerSocketAddr: trackers) {
         vector<string> tokens = getTokens(trackerSocketAddr, ':');
         assert(!tokens.empty());
 

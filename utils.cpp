@@ -6,7 +6,7 @@
 #include "utils.h"
 
 
-vector<string> getTokens(string line, char DELIM) {
+vector<string> getTokens(const string &line, char DELIM) {
 
     string token;
     istringstream ss(line);
@@ -18,7 +18,7 @@ vector<string> getTokens(string line, char DELIM) {
     return res;
 }
 
-int getFileSize(string filePath) {
+int getFileSize(const string &filePath) {
     struct stat st{};
     if (stat(filePath.c_str(), &st) != 0) {
         return 0;
@@ -26,9 +26,9 @@ int getFileSize(string filePath) {
     return st.st_size;
 }
 
-string getHash(string path) {
+string getHash(const string &path) {
     // Returns hash for given filepath
-    string fileHash = "";
+    string fileHash;
 
     int size = getFileSize(path) - 1;
 
@@ -52,7 +52,7 @@ string getHash(string path) {
 
             hashstr[20] = '\0';// take only first 20 characters of each piece
             string temp(hashstr);
-            fileHash = fileHash + temp;
+            fileHash += temp;
 
             size -= PIECE_SIZE;
         }
@@ -60,7 +60,7 @@ string getHash(string path) {
     return fileHash;
 }
 
-string getFileNameFromPath(string path) {
+string getFileNameFromPath(const string &path) {
     unsigned found = path.find_last_of("/\\");
 
     clog << "Filepath from path: " << path.substr(0, found) << endl;
@@ -97,7 +97,7 @@ int getRandom(int min, int max) {
     return min + rand() % ((max + 1) - min);
 }
 
-string getNodeId(string str) {
+string getNodeId(const string &str) {
     unsigned char hash[SHA_DIGEST_LENGTH];
 
     char buffer[str.size() + 1];

@@ -3,6 +3,7 @@
 #include <netinet/in.h>
 #include <cstring>
 #include <libnet.h>
+#include <utility>
 #include <vector>
 #include <unordered_map>
 #include <unordered_set>
@@ -15,23 +16,24 @@ string myIp, myPort;
 // <hash, list-of-seeders-and-leechers>
 unordered_map<string, unordered_set<string>> seedersAndLeechers;
 
-void fillFieldsFromMsg(string msgBuffer, string &commandType, string &shaOfSha, string &clientIP, string &clientPort) {
+void fillFieldsFromMsg(const string &msgBuffer, string &commandType, string &shaOfSha, string &clientIP,
+                       string &clientPort) {
     vector<string> tokens = getTokens(msgBuffer, FIELD_SEPARATOR);
 
     if (tokens.empty()) {
         clog << "Tokens empty" << endl;
         return;
     }
-    commandType = tokens.size() > 0 ? tokens[0] : "";
+    commandType = !tokens.empty() ? tokens[0] : "";
     shaOfSha = tokens.size() > 1 ? tokens[1] : "";
     clientIP = tokens.size() > 2 ? tokens[2] : "";
     clientPort = tokens.size() > 3 ? tokens[3] : "";
 }
 
-void notifyOtherTracker(string syncMsg, string otherTrackerSocket) {
+void notifyOtherTracker(const string &syncMsg, const string &otherTrackerSocket) {
     auto tokens = getTokens(otherTrackerSocket, ':');
     int sockfd;
-    struct sockaddr_in servaddr;
+    struct sockaddr_in servaddr{};
 
     // Creating socket file descriptor
     if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
@@ -79,7 +81,7 @@ void serveTracker(int udpfd, struct sockaddr_in cliaddr) {
     }
 }
 
-void serveClient(int newsocketFD, struct sockaddr_in newAddr, string otherTrackerSocket) {
+void serveClient(int newsocketFD, struct sockaddr_in newAddr, const string &otherTrackerSocket) {
     cout << "Inside serveClient" << endl;
     cout << "Received request from: "
          << inet_ntoa(newAddr.sin_addr) << ":" << ntohs(newAddr.sin_port) << endl;
@@ -115,7 +117,7 @@ void serveClient(int newsocketFD, struct sockaddr_in newAddr, string otherTracke
         unordered_set<string> uset = seedersAndLeechers[shaOfSha];
         // TODO: construct a string to be returned
         string response;
-        for (auto e: uset) {
+        for (const auto &e: uset) {
             response.append(e);
             response += FIELD_SEPARATOR;
         }
@@ -126,9 +128,9 @@ void serveClient(int newsocketFD, struct sockaddr_in newAddr, string otherTracke
     }
 
     cout << "Updated seedersAndLeechers list" << endl;
-    for (auto e: seedersAndLeechers) {
+    for (const auto& e: seedersAndLeechers) {
         cout << "\t" << e.first << endl;
-        for (auto p:e.second) {
+        for (const auto& p:e.second) {
             cout << "\t\t" << p << endl;
         }
         cout << endl;
@@ -146,7 +148,7 @@ void serveClient(int newsocketFD, struct sockaddr_in newAddr, string otherTracke
     }
 }
 
-void tcpUdp(string otherTrackerSocket) {
+void tcpUdp(const string &otherTrackerSocket) {
     int listenFD;
     int udpFD;
     int connFD;
@@ -155,7 +157,7 @@ void tcpUdp(string otherTrackerSocket) {
     int maxfdp1;
     fd_set rset;
 
-    struct sockaddr_in serveraddr, cliaddr;
+    struct sockaddr_in serveraddr{}, cliaddr{};
 
     // Create TCP socket for listening
     listenFD = socket(AF_INET, SOCK_STREAM, 0);
@@ -213,7 +215,7 @@ void tcpUdp(string otherTrackerSocket) {
         //       descriptor  is  considered  ready if it is possible to perform a corre‐
         //       sponding  I/O  operation
         //       Returns number of ready descriptors
-        select(maxfdp1, &rset, NULL, NULL, NULL);
+        select(maxfdp1, &rset, nullptr, nullptr, nullptr);
 
         // if tcp socket is readable then handle
         // it by accepting the connection
