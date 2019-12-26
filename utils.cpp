@@ -31,7 +31,6 @@ string getHash(string path) {
     string fileHash = "";
 
     int size = getFileSize(path) - 1;
-    int pieces = ceil((float) size / (float) PIECE_SIZE);
 
     ifstream ifile(path, ios::binary);
     int bytesToRead;

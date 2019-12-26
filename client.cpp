@@ -185,7 +185,7 @@ void fillFieldsFromMtorrentFile(string mTorrentFilePath,
     cout << "Read from " << mTorrentFilePath << endl;
     cout << " fileSize " << fileSize << endl;
     cout << " hash " << hash << endl;
-    for (int i = 0; i < trackers.size(); i++)
+    for (int i = 0; i < (int) trackers.size(); i++)
         cout << " tracker" << i + 1 << " " << trackers[i] << endl;
 
     infile.close();
@@ -349,9 +349,9 @@ void pieceSelectionAlgo(vector<string> &peerList,
     for (auto e:pieceToPeersMapping) {
         int pieceNumber = e.first;
         vector<int> peers = e.second;
-        int idx = getRandom(0, peers.size() - 1);// generate in range [0, peers.size)
-        assert(idx < peers.size());
-        assert(peers[idx] < peerToPiecesMap.size());
+        int idx = getRandom(0, (int) peers.size() - 1);// generate in range [0, peers.size)
+        assert(idx < (int) peers.size());
+        assert(peers[idx] < (int) peerToPiecesMap.size());
         peerToPiecesMap[peers[idx]].push_back(pieceNumber);
     }
 }
@@ -359,22 +359,22 @@ void pieceSelectionAlgo(vector<string> &peerList,
 vector<string> getPeerBitVectors(vector<string> &peerList, string shaOfSha, int numPieces) {
     // Initialize empty peerBitVectors
     vector<string> peerBitVectors(peerList.size(), string(numPieces, '0'));
-    for (auto i = 0; i < peerBitVectors.size(); i++) {
+    for (auto i = 0; i < (int) peerBitVectors.size(); i++) {
         cout << "peerBitVectors of " << peerList[i] << " before: " << peerBitVectors[i] << endl;
     }
 
     // Contact each peer on separate threads
     thread *peerPieceInfoThreads = new thread[peerList.size()];
-    for (int i = 0; i < peerList.size(); i++) {
+    for (int i = 0; i < (int) peerList.size(); i++) {
         peerPieceInfoThreads[i] = thread(downloadPeerPieceInfo, peerList[i], shaOfSha, ref(peerBitVectors[i]));
     }
 
-    for (int i = 0; i < peerList.size(); i++) {
+    for (int i = 0; i < (int) peerList.size(); i++) {
         peerPieceInfoThreads[i].join();
     }
     delete[] peerPieceInfoThreads;
 
-    for (auto i = 0; i < peerBitVectors.size(); i++) {
+    for (auto i = 0; i < (int) peerBitVectors.size(); i++) {
         cout << "peerBitVectors of " << peerList[i] << " after: " << peerBitVectors[i] << endl;
     }
 
@@ -513,7 +513,7 @@ void downloadFile(string mTorrentFilePath, string fileNameToSave) {
 
     pieceSelectionAlgo(peerList, peerBitVectors, peerPiecesToGet);
 
-    for (int peerId = 0; peerId < peerPiecesToGet.size(); peerId++) {
+    for (int peerId = 0; peerId < (int) peerPiecesToGet.size(); peerId++) {
         cout << "Pieces to be fetched from peer " << peerId << " :";
         for (auto e: peerPiecesToGet[peerId])
             cout << e << " ";
@@ -522,7 +522,7 @@ void downloadFile(string mTorrentFilePath, string fileNameToSave) {
 
 
     thread *pieceDownloaderThreads = new thread[peerList.size()];
-    for (int i = 0; i < peerList.size(); i++) {
+    for (int i = 0; i < (int) peerList.size(); i++) {
         pieceDownloaderThreads[i] = thread(pieceDownloader,
                                            fileNameToSave,
                                            peerList[i],
@@ -531,7 +531,7 @@ void downloadFile(string mTorrentFilePath, string fileNameToSave) {
                                            fileSize);
 
     }
-    for (int i = 0; i < peerList.size(); i++) {
+    for (int i = 0; i < (int) peerList.size(); i++) {
         pieceDownloaderThreads[i].join();
     }
     delete[] pieceDownloaderThreads;

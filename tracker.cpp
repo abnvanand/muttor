@@ -152,7 +152,7 @@ void tcpUdp(string otherTrackerSocket) {
     int connFD;
 
     socklen_t addr_size;
-    int nready, maxfdp1;
+    int maxfdp1;
     fd_set rset;
 
     struct sockaddr_in serveraddr, cliaddr;
@@ -202,12 +202,18 @@ void tcpUdp(string otherTrackerSocket) {
     while (true) {
         // Infinite loop Accepts incoming requests from clients
 
-        // set listenfd and udpfd in readset
+        // add listenfd and udpfd to readset
         FD_SET(listenFD, &rset);
         FD_SET(udpFD, &rset);
 
         // select the ready descriptor
-        nready = select(maxfdp1, &rset, NULL, NULL, NULL);
+        // select() and pselect() allow a program to  monitor  multiple  file  de‐
+        //       scriptors,  waiting  until  one  or more of the file descriptors become
+        //       "ready" for some class of I/O operation (e.g., input possible).  A file
+        //       descriptor  is  considered  ready if it is possible to perform a corre‐
+        //       sponding  I/O  operation
+        //       Returns number of ready descriptors
+        select(maxfdp1, &rset, NULL, NULL, NULL);
 
         // if tcp socket is readable then handle
         // it by accepting the connection
@@ -229,8 +235,6 @@ void tcpUdp(string otherTrackerSocket) {
             thread serverTrackersThread(serveTracker, udpFD, cliaddr);
             serverTrackersThread.detach();
         }
-
-
     }
 #pragma clang diagnostic pop
 }
