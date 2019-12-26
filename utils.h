@@ -38,7 +38,7 @@ string getFileNameFromPath(const string& path);
 
 string getSHAofSHA(string sha);
 
-string getNodeId(const string& str);
+string getNodeId(string str);
 
 int getRandom(int min, int max);
 

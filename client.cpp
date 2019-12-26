@@ -44,10 +44,10 @@ void servePeerRequest(int newsocket, struct sockaddr_in newAddr) {
     int requestType;
     recv(newsocket, &requestType, sizeof(requestType), 0);
     if (requestType == REQUEST_BITVECTOR) {
-        char shaOfShaBuffer[SHA_DIGEST_LENGTH + 1];
+        char shaOfShaBuffer[41];
 
-        recv(newsocket, &shaOfShaBuffer, SHA_DIGEST_LENGTH, 0);
-        shaOfShaBuffer[SHA_DIGEST_LENGTH] = '\0';
+        recv(newsocket, &shaOfShaBuffer, 40, 0);
+        shaOfShaBuffer[40] = '\0';
 
         string shaOfSha = string(shaOfShaBuffer);
 
@@ -58,10 +58,10 @@ void servePeerRequest(int newsocket, struct sockaddr_in newAddr) {
         send(newsocket, bitVector.c_str(), bitVector.size(), 0);
 
     } else if (requestType == REQUEST_DATA) {
-        char shaOfShaBuffer[SHA_DIGEST_LENGTH + 1];
+        char shaOfShaBuffer[41];
 
-        recv(newsocket, &shaOfShaBuffer, SHA_DIGEST_LENGTH, 0);
-        shaOfShaBuffer[SHA_DIGEST_LENGTH] = '\0';
+        recv(newsocket, &shaOfShaBuffer, 40, 0);
+        shaOfShaBuffer[40] = '\0';
         string shaOfSha = string(shaOfShaBuffer);
 
         int pieceId = -1;
@@ -182,7 +182,7 @@ void fillFieldsFromMtorrentFile(const string &mTorrentFilePath,
                                 vector<string> &trackers,
                                 string &fileSize,
                                 string &hash) {
-    // Hash = 20 char sha1 of each piece
+    // Hash = 40 char sha1 of each piece
     ifstream infile(mTorrentFilePath);
     getline(infile, fileSize); // skips filename
     getline(infile, fileSize);
