@@ -97,3 +97,22 @@ int getRandom(int min, int max) {
     return min + rand() % ((max + 1) - min);
 }
 
+string getNodeId(string str) {
+    unsigned char hash[SHA_DIGEST_LENGTH];
+
+    char buffer[str.size() + 1];
+    strcpy(buffer, str.c_str());
+    SHA1((unsigned char *) buffer, sizeof(buffer) - 1, hash);
+
+    char hashstr[41];
+    for (int i = 0; i < 20; ++i)
+        sprintf(&hashstr[i * 2], "%02x", hash[i]);
+
+    // FIXME: currently our torrent file is identified
+    //  by shaofsha of 20 characters so our node ids must also be
+    //  of 20 characters so that both are comparable
+    //  in order to determine closer nodes in the DHT chain
+    hashstr[20] = '\0'; // take only first 20 characters
+
+    return hashstr;
+}

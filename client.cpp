@@ -17,7 +17,17 @@
 #define REQUEST_BITVECTOR 100
 #define REQUEST_DATA 101
 #define QUIT "q"
+
+#define SOCKET_ADDR(x, y) (x+":"+y)
+
 using namespace std;
+
+string myNodeId;
+
+struct SuccessorNode {
+    string socketAddr;
+    string nodeId;
+};
 
 string myIp, myPort, defaultTracker;
 // <hash, bitvector>
@@ -39,7 +49,7 @@ void servePeerRequest(int newsocket, struct sockaddr_in newAddr) {
         recv(newsocket, &shaOfShaBuffer, SHA_DIGEST_LENGTH, 0);
         shaOfShaBuffer[SHA_DIGEST_LENGTH] = '\0';
 
-        string shaOfSha = (string) shaOfShaBuffer;
+        string shaOfSha = string(shaOfShaBuffer);
 
         cout << "Peer requesting for bitvector of " << shaOfSha << endl;
 
@@ -52,7 +62,7 @@ void servePeerRequest(int newsocket, struct sockaddr_in newAddr) {
 
         recv(newsocket, &shaOfShaBuffer, SHA_DIGEST_LENGTH, 0);
         shaOfShaBuffer[SHA_DIGEST_LENGTH] = '\0';
-        string shaOfSha = (string) shaOfShaBuffer;
+        string shaOfSha = string(shaOfShaBuffer);
 
         int pieceId = -1;
         recv(newsocket, &pieceId, sizeof(pieceId), 0);
@@ -679,6 +689,8 @@ int main(int argc, char **argv) {
     myPort = tokens[1];
     defaultTracker = argv[2];
 
+    myNodeId = getNodeId(SOCKET_ADDR(myIp, myPort));
+    cout << "myNodeId: " << myNodeId << endl;
     // NOTE: donot use cin>> anywhere in the code coz things will break
     // use getline(cin, myPort); instead
 

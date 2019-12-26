@@ -38,6 +38,8 @@ string getFileNameFromPath(string path);
 
 string getSHAofSHA(string sha);
 
+string getNodeId(string str);
+
 int getRandom(int min, int max);
 
 #endif //MUTTOR_UTILS_H
